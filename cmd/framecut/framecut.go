@@ -225,7 +225,7 @@ func main() {
 	}()
 
 	startT := time.Now()
-	iterDir := startT.Format("01.02_15:04:05")
+	iterDir := startT.Format("01.02__15_04_05")
 
 	for _, fileName := range files {
 		filePath := filepath.Join(flagsValues.InputPath, fileName)
