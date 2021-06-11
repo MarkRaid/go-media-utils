@@ -1,4 +1,4 @@
-module github.com/MarkRaid/ffmpeg_screenshots
+module github.com/MarkRaid/go-media-utils
 
 go 1.15
 

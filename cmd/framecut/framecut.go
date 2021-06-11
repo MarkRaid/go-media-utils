@@ -1,46 +1,42 @@
 // TODO: добавить проверку того, что ffmpeg вообще существует
 // TODO: что делать, если мы передаём в names.txt абсолютный путь или если мы в командной строке передаём абсолютный путь
-//       тогда по
+// TODO: надо короче, чтобы горутина режущая возвращала бы ошибку или nil в канал errors или done
+// 		 тогда у нас уже имеется горутина, которая опустошает канал done - в ней нужно описать логику логирования
+// TODO: катя просила, чтобы можно было по конкретной картинке найти кадр в плеере и сделать нормальный, не смазанный кадр в сцене
+// TODO: перенести всё по пакетам
+// TODO: добавить логирование
+// TODO: переходим на git-flow с ветками, ветку мастер держим всегда для продакшена
 
 package main
 
 import (
 	"fmt"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sort"
-	"math"
-	"math/rand"
-	"runtime"
 	"time"
-	"errors"
-	"bufio"
 
-	"github.com/urfave/cli/v2"
 	"github.com/malashin/ffinfo"
-    "github.com/vbauerster/mpb/v6"
-    "github.com/vbauerster/mpb/v6/decor"
+	"github.com/urfave/cli/v2"
+	"github.com/vbauerster/mpb/v6"
+	"github.com/vbauerster/mpb/v6/decor"
+
+	"github.com/MarkRaid/go-media-utils/pkg/filenames"
+	"github.com/MarkRaid/go-media-utils/pkg/fshelp"
+	"github.com/MarkRaid/go-media-utils/pkg/mediahelp"
 )
 
+
 // go run framecut.go -i /home/mark/grive/Projects/Go/ffmpeg-screenshots/input -o /home/mark/grive/Projects/Go/ffmpeg-screenshots/output/ --names /home/mark/grive/Projects/Go/ffmpeg-screenshots/names.txt
-// go run framecut.go -i /home/mark/grive/Projects/Go/ffmpeg-screenshots/input -o /home/mark/grive/Projects/Go/ffmpeg-screenshots/output/ - \
+// go run framecut.go -i ./input -o ./output/ - \
 // "Я.Железо - тестирование устройств-1Oy_dp1drzI (2-я копия).mp4" \
 // "Я.Железо - тестирование устройств-1Oy_dp1drzI (1-я копия).mp4" \
 // "Я.Железо - тестирование устройств-1Oy_dp1drzI.mp4"
-
-type StreamType string
-
-
-const (
-	StreamAny StreamType      = ""
-	StreamVideo StreamType    = "video"
-	StreamAudio StreamType    = "audio"
-	StreamSubtitle StreamType = "subtitle"
-)
 
 
 type cliFlagsValues struct {
@@ -72,7 +68,7 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 			Destination: &flagsValues.InputPath,
 		},
 		&cli.PathFlag{
-			Name:        "ouput",
+			Name:        "output",
 			Aliases:     []string{"o"},
 			Usage:       "Output folder",
 			Required:    true,
@@ -118,7 +114,7 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 
 	cliApp.Action = func(ctx *cli.Context) (err error) {
 		if ctx.IsSet("names") {
-			flagsValues.FileList, err = readFileList(ctx.String("names"))
+			flagsValues.FileList, err = fshelp.ReadFileList(ctx.String("names"))
 		   
 		    if err != nil {
 		        return cli.Exit(err, 1)
@@ -135,11 +131,11 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 			flagsValues.FileList = ctx.Args().Slice()
 		}
 
-		allPatterns := []string{}
+		allPatterns := make([]string, 10)
 		allPatterns = append(allPatterns, ctx.StringSlice("glob")...)
 		allPatterns = append(allPatterns, ctx.StringSlice("notGlob")...)
 
-		if invalidPattern, err := testPatternSlice(allPatterns); err != nil {
+		if invalidPattern, err := filenames.TestPatternSlice(allPatterns); err != nil {
 			return cli.Exit(fmt.Sprintf("Invalid pattern %v, with error: %v", invalidPattern, err), 1)
 		}
 
@@ -158,12 +154,12 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 
 
 type cutJob struct {
-	ffprobeData *ffinfo.File
-	progress	*mpb.Progress
-	filePath 	string
-	outFmtTempl string
-	numFrames 	int
-	maxOffset   time.Duration
+	videoDuration float64
+	progress	  *mpb.Progress
+	filePath 	  string
+	outFmtTempl   string
+	numFrames 	  int
+	maxOffset     time.Duration
 }
 
 
@@ -181,7 +177,7 @@ func main() {
 		log.Fatal("Flags initialization failed: %v", err)
 	}
 
-	files, err := filterByGlobs(
+	files, err := filenames.FilterByGlobs(
 		flagsValues.FileList,
 		flagsValues.GlobList,
 		flagsValues.NotGlobList,
@@ -194,12 +190,7 @@ func main() {
 	jobs := make(chan cutJob, 100)
 	done := make(chan bool, 100)
 
-	numWorkers := int(math.Min(
-		float64(10),
-		float64(runtime.NumCPU()),
-	))
-
-    for id := 1; id <= numWorkers; id++ {
+    for id := 1; id <= 10; id++ {
         go cuttingWorker(jobs, done)
     }
 
@@ -219,7 +210,7 @@ func main() {
 	)
 
 	go func() {
-	    for _ = range done {
+	    for range done {
 	    	bar.Increment()
 	    }
 	}()
@@ -240,7 +231,7 @@ func main() {
 		    continue
 		}
 
-		if !isVideoFile(ffprobeData) {
+		if !mediahelp.IsVideoFile(ffprobeData) {
 			bar.Increment()
 			// log.Fatalf("For file: %v, video stream not found", fileName, err.Error())
 			continue
@@ -250,7 +241,7 @@ func main() {
 			flagsValues.OutputPath,
 			iterDir,
 			filepath.Base(strings.TrimSuffix(filePath, filepath.Ext(filePath))),
-			fmt.Sprintf("screenshot_%%s.%s", flagsValues.Extention),
+			fmt.Sprintf("frame_%%s.%s", flagsValues.Extention),
 		)
 
 		err = os.MkdirAll(
@@ -263,40 +254,40 @@ func main() {
 			log.Fatal(err)
 		}
 
+		stream := mediahelp.GetStream(ffprobeData, 0, mediahelp.StreamVideo)
+
+		if stream == nil {
+			// log.Fatalf("Could not get a stream type %s by index %d", string(mediahelp.StreamVideo), 0)
+			continue
+		}
+
+		videoDuration, err := ffprobeData.StreamDuration(stream.Index)
+		
+		if err != nil && videoDuration <= 0 {
+			// TODO: Тут надо просто написать, что ошибку в лог
+			continue
+		}
+
 		job := cutJob{
-			ffprobeData: ffprobeData,
-			progress:	 progress,
-			filePath: 	 filePath,
-			outFmtTempl: outFmtTempl,
-			numFrames:   flagsValues.ScreenshotCount,
-			maxOffset:   flagsValues.MaxOffset,
+			videoDuration: videoDuration,
+			progress:	   progress,
+			filePath: 	   filePath,
+			outFmtTempl:   outFmtTempl,
+			numFrames:     flagsValues.ScreenshotCount,
+			maxOffset:     flagsValues.MaxOffset,
 		}
 
         jobs <- job
     }
 
     close(jobs)
-
     progress.Wait()
+    close(done)
 }
 
 
 func cuttingWorker(jobs <-chan cutJob, done chan<- bool) {
 	for job := range jobs {
-		stream := GetStream(job.ffprobeData, 0, StreamVideo)
-
-		if stream == nil {
-			log.Fatalf("Could not get a stream type %s by index %d", string(StreamVideo), 0)
-		}
-
-		videoDuration, err := job.ffprobeData.StreamDuration(stream.Index)
-		
-		if err != nil && videoDuration <= 0 {
-			// TODO: Тут надо просто написать, что ошибку в лог
-			done <- false
-			continue
-		}
-
 		bar := job.progress.AddBar(int64(job.numFrames),
 			mpb.BarFillerTrim(),
 			mpb.BarRemoveOnComplete(),
@@ -307,7 +298,7 @@ func cuttingWorker(jobs <-chan cutJob, done chan<- bool) {
 			),
 		)
 
-		baseOffset := int(videoDuration) / (job.numFrames + 1)
+		baseOffset := int(job.videoDuration) / (job.numFrames + 1)
 		maxRandOffset := int(job.maxOffset.Seconds())
 
 		if baseOffset < maxRandOffset {
@@ -324,13 +315,18 @@ func cuttingWorker(jobs <-chan cutJob, done chan<- bool) {
 				Zfill(frameNum, job.numFrames),
 			)
 
+			// TODO: сама нарезка параллельна только на уровне файлов, что если сделать нарезку параллельной на самом файле
+			// 		 можно попробовать запускать некоторое количество процессов exec не дожидаясь их завершения сразу, в этом цикле
+			//       можно ввести ещё одни пулл, в котором сам файл будет нарезаться на кусочки процессами ffmpeg-а
+			//       и где-то, после того, как процесс ffmpeg-а нарезал скриншот, мы будем ожидать его с помощью exec и инкрементировать прогресс бар
+			// TODO: "0:v:0" - последнюю цифру нужно сделать параметром этой функции
 			cmd := exec.Command("ffmpeg", "-hide_banner", "-n", "-ss", strconv.FormatInt(int64(ssOffset), 10), "-i", job.filePath, "-map", "0:v:0", "-frames:v", "1", "-q:v", "1", "-f", "image2", "-update", "1", absoluteOutputFileName)
 
 			// cmd.Stdout = os.Stdout
 			// cmd.Stderr = os.Stderr
 			// cmd.Stdin = os.Stdin
 
-			if err = cmd.Run(); err != nil {
+			if err := cmd.Run(); err != nil {
 				log.Fatal(err)
 			}
 
@@ -340,76 +336,6 @@ func cuttingWorker(jobs <-chan cutJob, done chan<- bool) {
 		done <- true
 	}
 }
-
-
-func GetStream(ffprobeData *ffinfo.File, sIndex int, sType StreamType) *ffinfo.Stream {
-	var streams []*ffinfo.Stream
-
-	for _, stream := range ffprobeData.Streams {
-		if stream.CodecType == string(sType) {
-			streams = append(streams, &stream)
-		}
-	}
-
-	sort.Slice(streams, func(i, j int) (less bool) {
-		s_i := streams[i]
-		s_j := streams[j]
-
-		return s_i.Index < s_j.Index
-	})
-
-	if len(streams) - 1 < sIndex {
-		return nil
-	}
-
-	return streams[sIndex]
-}
-
-
-func isVideoFile(ffprobeData *ffinfo.File) bool {
-	for _, stream := range ffprobeData.Streams {
-		if stream.CodecType == string(StreamVideo) {
-			return true
-		}
-	}
-
-	return false
-}
-
-
-func filterByGlobs(names, globs, notGlobs []string) (matched []string, err error) {
-   	for _, name := range names {
-   		if matchedWithAnyGlob(name, globs) && !matchedWithAnyGlob(name, notGlobs) {
-   			matched = append(matched, name)
-   		}
-   	}
-
-    if len(matched) != 0 {
-    	return matched, nil
-    }
-
-    for _, name := range names {
-	    if matchedWithAnyGlob(name, globs) {
-			return matched, errors.New(
-				"All names that match at least one glob also match at least one notGlobs",
-			)
-	    }
-    }
-
-	return matched, errors.New("No names matching glob expressions")
-}
-
-
-func matchedWithAnyGlob(name string, globs []string) bool {
-	for _, pattern := range globs {
-   		if matched, _ := filepath.Match(pattern, name); matched {   			
-			return true
-		}
-	}
-
-	return false
-}
-
 
 func DigitCount(n int) int {
 	return int(math.Ceil(math.Log10(math.Abs(float64(n)) + 0.5)))
@@ -421,34 +347,4 @@ func Zfill(num, maxNum int) string {
 }
 
 
-func readFileList(path string) (lines []string, err error) {
-    file, err := os.Open(path)
 
-    if err != nil {
-        return
-    }
-
-    defer file.Close()
-
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-        lines = append(lines, scanner.Text())
-    }
-
-    if err = scanner.Err(); err != nil {
-        return
-    }
-
-    return
-}
-
-
-func testPatternSlice(patterns []string) (pattern string, err error) {
-	for _, pattern = range patterns {
-		if _, err = filepath.Match(pattern, ""); err != nil {
-			return
-		}
-	}
-
-	return "", nil
-}
