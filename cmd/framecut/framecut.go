@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/malashin/ffinfo"
-	"github.com/urfave/cli/v2"
-	"github.com/vbauerster/mpb/v6"
-	"github.com/vbauerster/mpb/v6/decor"
+	"github.com/urfave/cli"
+	"github.com/vbauerster/mpb"
+	"github.com/vbauerster/mpb/decor"
 
 	"github.com/MarkRaid/go-media-utils/pkg/filenames"
 	"github.com/MarkRaid/go-media-utils/pkg/fshelp"
