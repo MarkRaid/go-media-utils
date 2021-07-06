@@ -21,7 +21,7 @@ func GetStream(ffprobeData *ffinfo.File, sIndex int, sType StreamType) *ffinfo.S
 		return s_i.Index < s_j.Index
 	})
 
-	if len(streams) - 1 < sIndex {
+	if len(streams)-1 < sIndex {
 		return nil
 	}
 

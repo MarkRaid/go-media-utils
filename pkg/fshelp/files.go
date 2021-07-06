@@ -1,11 +1,9 @@
 package fshelp
 
-
 import (
 	"bufio"
 	"os"
 )
-
 
 func ReadFileList(path string) (lines []string, err error) {
 	file, err := os.Open(path)

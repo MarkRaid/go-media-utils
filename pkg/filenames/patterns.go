@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 )
 
-
 func FilterByGlobs(names, globs, notGlobs []string) (matched []string, err error) {
 	for _, name := range names {
 		if MatchedWithAnyGlob(name, globs) && !MatchedWithAnyGlob(name, notGlobs) {
@@ -28,7 +27,6 @@ func FilterByGlobs(names, globs, notGlobs []string) (matched []string, err error
 	return matched, errors.New("no names matching glob expressions")
 }
 
-
 func MatchedWithAnyGlob(name string, globs []string) bool {
 	for _, pattern := range globs {
 		if matched, _ := filepath.Match(pattern, name); matched {
@@ -38,7 +36,6 @@ func MatchedWithAnyGlob(name string, globs []string) bool {
 
 	return false
 }
-
 
 func TestPatternSlice(patterns []string) (pattern string, err error) {
 	for _, pattern = range patterns {

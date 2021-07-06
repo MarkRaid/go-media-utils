@@ -7,6 +7,8 @@
 // TODO: добавить логирование
 // TODO: переходим на git-flow с ветками, ветку мастер держим всегда для продакшена
 
+// TODO: Заняться документацией, а то потом не понятно что это и как это использовать
+
 package main
 
 import (
@@ -22,15 +24,14 @@ import (
 	"time"
 
 	"github.com/malashin/ffinfo"
-	"github.com/urfave/cli"
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
+	"github.com/urfave/cli/v2"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 
 	"github.com/MarkRaid/go-media-utils/pkg/filenames"
 	"github.com/MarkRaid/go-media-utils/pkg/fshelp"
 	"github.com/MarkRaid/go-media-utils/pkg/mediahelp"
 )
-
 
 // go run framecut.go -i /home/mark/grive/Projects/Go/ffmpeg-screenshots/input -o /home/mark/grive/Projects/Go/ffmpeg-screenshots/output/ --names /home/mark/grive/Projects/Go/ffmpeg-screenshots/names.txt
 // go run framecut.go -i ./input -o ./output/ - \
@@ -38,18 +39,16 @@ import (
 // "Я.Железо - тестирование устройств-1Oy_dp1drzI (1-я копия).mp4" \
 // "Я.Железо - тестирование устройств-1Oy_dp1drzI.mp4"
 
-
 type cliFlagsValues struct {
-	InputPath        string
-	OutputPath       string
-	ScreenshotCount  int
-	Extention        string
-	MaxOffset        time.Duration
-	FileList         []string
-	GlobList         []string
-	NotGlobList      []string
+	InputPath       string
+	OutputPath      string
+	ScreenshotCount int
+	Extention       string
+	MaxOffset       time.Duration
+	FileList        []string
+	GlobList        []string
+	NotGlobList     []string
 }
-
 
 // TODO: тут ещё нужно подумать посидеть
 func initCliApp(cliApp *cli.App) *cliFlagsValues {
@@ -92,17 +91,17 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 		&cli.DurationFlag{
 			Name:        "maxOffset",
 			Usage:       "",
-			Value:       5 * time.Second,
+			Value:       5 * time.Minute,
 			Destination: &flagsValues.MaxOffset,
 		},
 		&cli.PathFlag{
-			Name:        "names",
-			Usage:       "File with file paths",
+			Name:  "names",
+			Usage: "File with file paths, like a names.txt",
 		},
 		&cli.StringSliceFlag{
 			Name:        "glob",
 			Usage:       "Regular expressions that filter the list of files. It can be specified several times",
-			Value: 		 cli.NewStringSlice("*"),
+			Value:       cli.NewStringSlice("*"),
 			DefaultText: "[\"*\"]",
 		},
 		&cli.StringSliceFlag{
@@ -115,17 +114,17 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 	cliApp.Action = func(ctx *cli.Context) (err error) {
 		if ctx.IsSet("names") {
 			flagsValues.FileList, err = fshelp.ReadFileList(ctx.String("names"))
-		   
-		    if err != nil {
-		        return cli.Exit(err, 1)
-		    }
 
-		    if len(flagsValues.FileList) == 0 {
-		    	return cli.Exit("File specified in \"names\" flag is empty", 1)
-		    }
+			if err != nil {
+				return cli.Exit(err, 1)
+			}
+
+			if len(flagsValues.FileList) == 0 {
+				return cli.Exit("File specified in \"names\" flag is empty", 1)
+			}
 		} else {
 			if !ctx.Args().Present() {
-				return cli.Exit("You didn't specify any files as a positional argument, and you didn't specify \"name\" flag", 1)
+				return cli.Exit("You didn't specify any files as a positional argument, or you didn't specify \"name\" flag", 1)
 			}
 
 			flagsValues.FileList = ctx.Args().Slice()
@@ -147,21 +146,19 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 		}
 
 		return nil
-    }
+	}
 
-    return &flagsValues
+	return &flagsValues
 }
-
 
 type cutJob struct {
 	videoDuration float64
-	progress	  *mpb.Progress
-	filePath 	  string
+	progress      *mpb.Progress
+	filePath      string
 	outFmtTempl   string
-	numFrames 	  int
+	numFrames     int
 	maxOffset     time.Duration
 }
-
 
 func main() {
 	// TODO: это что такое
@@ -190,13 +187,13 @@ func main() {
 	jobs := make(chan cutJob, 100)
 	done := make(chan bool, 100)
 
-    for id := 1; id <= 10; id++ {
-        go cuttingWorker(jobs, done)
-    }
+	for id := 1; id <= 10; id++ {
+		go cuttingWorker(jobs, done)
+	}
 
 	progress := mpb.New(
 		mpb.WithWidth(60),
-		mpb.WithRefreshRate(300 * time.Millisecond),
+		mpb.WithRefreshRate(300*time.Millisecond),
 	)
 
 	bar := progress.AddBar(int64(len(files)),
@@ -210,9 +207,9 @@ func main() {
 	)
 
 	go func() {
-	    for range done {
-	    	bar.Increment()
-	    }
+		for range done {
+			bar.Increment()
+		}
 	}()
 
 	startT := time.Now()
@@ -222,13 +219,13 @@ func main() {
 		filePath := filepath.Join(flagsValues.InputPath, fileName)
 
 		// Ошибка это просто вывод stderr
-		ffprobeData, err := ffinfo.Probe(filePath) 
+		ffprobeData, err := ffinfo.Probe(filePath)
 		if err != nil {
-		    bar.Increment()
-		    // Здесь принтуем в итоговый лог что произошла такая-то ошибка
-		    // Тут скорее всего ffprobe уже напишет для какого файла ошибка
-		    // log.Fatalf("For file: %v, ffprobe error: %v", fileName, err.Error())
-		    continue
+			bar.Increment()
+			// Здесь принтуем в итоговый лог что произошла такая-то ошибка
+			// Тут скорее всего ffprobe уже напишет для какого файла ошибка
+			// log.Fatalf("For file: %v, ffprobe error: %v", fileName, err.Error())
+			continue
 		}
 
 		if !mediahelp.IsVideoFile(ffprobeData) {
@@ -262,7 +259,7 @@ func main() {
 		}
 
 		videoDuration, err := ffprobeData.StreamDuration(stream.Index)
-		
+
 		if err != nil && videoDuration <= 0 {
 			// TODO: Тут надо просто написать, что ошибку в лог
 			continue
@@ -270,21 +267,20 @@ func main() {
 
 		job := cutJob{
 			videoDuration: videoDuration,
-			progress:	   progress,
-			filePath: 	   filePath,
+			progress:      progress,
+			filePath:      filePath,
 			outFmtTempl:   outFmtTempl,
 			numFrames:     flagsValues.ScreenshotCount,
 			maxOffset:     flagsValues.MaxOffset,
 		}
 
-        jobs <- job
-    }
+		jobs <- job
+	}
 
-    close(jobs)
-    progress.Wait()
-    close(done)
+	close(jobs)
+	progress.Wait()
+	close(done)
 }
-
 
 func cuttingWorker(jobs <-chan cutJob, done chan<- bool) {
 	for job := range jobs {
@@ -305,14 +301,18 @@ func cuttingWorker(jobs <-chan cutJob, done chan<- bool) {
 			maxRandOffset = baseOffset
 		}
 
-		randOffset := float64(rand.Intn(maxRandOffset))
+		for iterNum := 1; iterNum <= job.numFrames; iterNum++ {
+			randOffset := 0.0
 
-		for frameNum := 1; frameNum <= job.numFrames; frameNum++ {
-			ssOffset := float64(baseOffset * frameNum) + randOffset
+			for i := 0; i < maxRandOffset; i++ {
+				randOffset += rand.Float64()
+			}
+
+			ssOffset := float64(baseOffset*iterNum) + randOffset
 
 			absoluteOutputFileName := fmt.Sprintf(
 				job.outFmtTempl,
-				Zfill(frameNum, job.numFrames),
+				Zfill(iterNum, job.numFrames),
 			)
 
 			// TODO: сама нарезка параллельна только на уровне файлов, что если сделать нарезку параллельной на самом файле
@@ -341,10 +341,6 @@ func DigitCount(n int) int {
 	return int(math.Ceil(math.Log10(math.Abs(float64(n)) + 0.5)))
 }
 
-
 func Zfill(num, maxNum int) string {
 	return fmt.Sprintf("%0[2]*[1]d", num, DigitCount(maxNum))
 }
-
-
-
