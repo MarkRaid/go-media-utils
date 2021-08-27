@@ -63,7 +63,6 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 			Name:        "input",
 			Aliases:     []string{"i"},
 			Usage:       "Video folder",
-			Required:    true,
 			Destination: &flagsValues.InputPath,
 		},
 		&cli.PathFlag{
@@ -95,7 +94,7 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 			Destination: &flagsValues.MaxOffset,
 		},
 		&cli.PathFlag{
-			Name:  "names",
+			Name:  "batch",
 			Usage: "File with file paths, like a names.txt",
 		},
 		&cli.StringSliceFlag{
