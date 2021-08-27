@@ -6,6 +6,14 @@ import (
 )
 
 func FilterByGlobs(names, globs, notGlobs []string) (matched []string, err error) {
+	if len(names) == 0 {
+		return matched, errors.New("names list is empty")	
+	}
+	
+	if len(globs) == 0 {
+		return matched, errors.New("glob list is empty")
+	}
+	
 	for _, name := range names {
 		if MatchedWithAnyGlob(name, globs) && !MatchedWithAnyGlob(name, notGlobs) {
 			matched = append(matched, name)
