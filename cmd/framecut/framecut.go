@@ -111,15 +111,15 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 	}
 
 	cliApp.Action = func(ctx *cli.Context) (err error) {
-		if ctx.IsSet("names") {
-			flagsValues.FileList, err = fshelp.ReadFileList(ctx.String("names"))
+		if ctx.IsSet("batch") {
+			flagsValues.FileList, err = fshelp.ReadFileList(ctx.String("batch"))
 
 			if err != nil {
 				return cli.Exit(err, 1)
 			}
 
 			if len(flagsValues.FileList) == 0 {
-				return cli.Exit("File specified in \"names\" flag is empty", 1)
+				return cli.Exit("File specified in \"batch\" flag is empty", 1)
 			}
 		} else {
 			if !ctx.Args().Present() {
