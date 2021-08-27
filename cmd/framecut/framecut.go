@@ -94,7 +94,7 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 			Destination: &flagsValues.MaxOffset,
 		},
 		&cli.PathFlag{
-			Name:  "batch",
+			Name:  "batch-file",
 			Usage: "File with file paths, like a names.txt",
 		},
 		&cli.StringSliceFlag{
@@ -111,15 +111,15 @@ func initCliApp(cliApp *cli.App) *cliFlagsValues {
 	}
 
 	cliApp.Action = func(ctx *cli.Context) (err error) {
-		if ctx.IsSet("batch") {
-			flagsValues.FileList, err = fshelp.ReadFileList(ctx.String("batch"))
+		if ctx.IsSet("batch-file") {
+			flagsValues.FileList, err = fshelp.ReadFileList(ctx.String("batch-file"))
 
 			if err != nil {
 				return cli.Exit(err, 1)
 			}
 
 			if len(flagsValues.FileList) == 0 {
-				return cli.Exit("File specified in \"batch\" flag is empty", 1)
+				return cli.Exit("File specified in \"batch-file\" flag is empty", 1)
 			}
 		} else {
 			if !ctx.Args().Present() {
