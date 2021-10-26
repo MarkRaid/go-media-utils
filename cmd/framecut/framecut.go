@@ -319,7 +319,7 @@ func cuttingWorker(jobs <-chan cutJob, done chan<- bool) {
 			//       можно ввести ещё одни пулл, в котором сам файл будет нарезаться на кусочки процессами ffmpeg-а
 			//       и где-то, после того, как процесс ffmpeg-а нарезал скриншот, мы будем ожидать его с помощью exec и инкрементировать прогресс бар
 			// TODO: "0:v:0" - последнюю цифру нужно сделать параметром этой функции
-			cmd := exec.Command("ffmpeg", "-hide_banner", "-n", "-ss", strconv.FormatInt(int64(ssOffset), 10), "-i", job.filePath, "-map", "0:v:0", "-frames:v", "1", "-q:v", "1", "-f", "image2", "-update", "1", absoluteOutputFileName)
+			cmd := exec.Command("ffmpeg", "-hide_banner", "-n", "-ss", strconv.FormatInt(int64(ssOffset), 10), "-i", job.filePath, "-map", "0:v:0", "-vf", "\"scale=iw*sar:ih,setsar=1/1\"", "-sws_flags", "sinc", "-frames:v", "1", "-q:v", "1", "-f", "image2", "-update", "1", absoluteOutputFileName)
 
 			// cmd.Stdout = os.Stdout
 			// cmd.Stderr = os.Stderr
